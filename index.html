@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Statistiques du serveur</title>
+<style>
+:root{
+  --bg:#14110d; --panel:#1e1913; --panel2:#251f17; --line:#3a2f22; --text:#e8dcc4; --muted:#9a8c73;
+  --gold:#d4a63a; --green:#5fbf6a; --red:#d9534f; --blue:#5b9bd5; --purple:#a78bd9; --grid:rgba(232,220,196,.10);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--line);background:linear-gradient(#1b1610,#14110d)}
+h1{margin:0;font-size:22px;letter-spacing:.5px;color:var(--gold)}
+h1 small{color:var(--muted);font-weight:400;font-size:14px;margin-left:8px}
+.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 8px currentColor;color:var(--red)}
+.dot.on{background:var(--green);color:var(--green)}
+main{max-width:1280px;margin:0 auto;padding:18px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.8px}
+.card .v{font-size:28px;font-weight:700;margin-top:2px}
+.card .s{color:var(--muted);font-size:12px;margin-top:2px;min-height:17px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px;margin-bottom:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px 10px}
+.panel h2{margin:0 0 8px;font-size:14px;color:var(--gold);text-transform:uppercase;letter-spacing:.8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.panel h2 span{color:var(--muted);font-size:12px;text-transform:none;letter-spacing:0;font-weight:400}
+canvas{width:100%;height:210px;display:block}
+.ranges{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.ranges button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer;font:inherit;font-size:13px}
+.ranges button.active{border-color:var(--gold);color:var(--gold)}
+.ret{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}
+.ret div{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center}
+.ret b{display:block;font-size:24px;color:var(--gold)}
+.ret span{color:var(--muted);font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:500}
+.note{background:#2a2217;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:14px;color:var(--muted);font-size:13px}
+.empty{color:var(--muted);font-size:13px;padding:6px 0}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:14px 0 26px}
+.ok{color:var(--green)}.warn{color:var(--gold)}.bad{color:var(--red)}
+@media (max-width:480px){.grid{grid-template-columns:1fr}.ret{grid-template-columns:repeat(2,1fr)}}
+</style>
+<script src="config.js"></script>
+</head>
+<body>
+<header>
+  <h1 id="title">Statistiques<small id="sub"></small></h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connexion…</span></div>
+</header>
+<main>
+  <div class="note" id="note" hidden></div>
+  <section class="cards">
+    <div class="card"><div class="k">Joueurs</div><div class="v" id="vOnline">–</div><div class="s" id="sOnline"></div></div>
+    <div class="card"><div class="k">Record</div><div class="v" id="vRecord">–</div><div class="s" id="sRecord"></div></div>
+    <div class="card"><div class="k">TPS</div><div class="v" id="vTps">–</div><div class="s" id="sTps"></div></div>
+    <div class="card"><div class="k">Ping moyen</div><div class="v" id="vPing">–</div><div class="s" id="sPing"></div></div>
+    <div class="card"><div class="k">Mémoire</div><div class="v" id="vRam">–</div><div class="s" id="sRam"></div></div>
+    <div class="card"><div class="k">Entités</div><div class="v" id="vEnt">–</div><div class="s" id="sEnt"></div></div>
+    <div class="card"><div class="k">Actifs aujourd'hui</div><div class="v" id="vActive">–</div><div class="s" id="sActive"></div></div>
+    <div class="card"><div class="k">En ligne depuis</div><div class="v" id="vUp">–</div><div class="s" id="sUp"></div></div>
+  </section>
+
+  <div class="grid" id="rtSection">
+    <section class="panel"><h2>Joueurs <span>temps réel (5 min)</span></h2><canvas id="cRtPlayers"></canvas></section>
+    <section class="panel"><h2>TPS <span>temps réel (5 min)</span></h2><canvas id="cRtTps"></canvas></section>
+  </div>
+
+  <div class="ranges" id="ranges">
+    <button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="24" class="active">24 h</button><button data-h="0">Tout</button>
+  </div>
+  <div class="grid">
+    <section class="panel"><h2>Joueurs connectés <span id="hint1"></span></h2><canvas id="cPlayers"></canvas></section>
+    <section class="panel"><h2>TPS <span>20 = parfait</span></h2><canvas id="cTps"></canvas></section>
+    <section class="panel"><h2>Ping moyen <span>ms</span></h2><canvas id="cPing"></canvas></section>
+    <section class="panel"><h2>Mémoire utilisée <span>% du maximum</span></h2><canvas id="cRam"></canvas></section>
+    <section class="panel"><h2>Entités <span>hors joueurs</span></h2><canvas id="cEnt"></canvas></section>
+  </div>
+
+  <div class="grid">
+    <section class="panel"><h2>Actifs et nouveaux joueurs <span>30 derniers jours</span></h2><canvas id="cDaily"></canvas></section>
+    <section class="panel"><h2>Heures de pointe <span id="hZone"></span></h2><canvas id="cHours"></canvas></section>
+    <section class="panel"><h2>Moyenne par jour de la semaine</h2><canvas id="cWeek"></canvas></section>
+    <section class="panel">
+      <h2>Rétention <span id="retHint"></span></h2>
+      <div class="ret">
+        <div><b id="rD1">–</b><span>D1</span></div><div><b id="rD7">–</b><span>D7</span></div>
+        <div><b id="rD30">–</b><span>D30</span></div><div><b id="rR7">–</b><span>Retour ≤ 7 j</span></div>
+      </div>
+      <div id="cohorts"></div>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section class="panel" style="grid-column:1/-1"><h2>Communauté <span id="sumHint"></span></h2><div id="summary" class="empty">–</div></section>
+    <section class="panel" style="grid-column:1/-1"><h2>Derniers pics de lag <span>TPS &lt; seuil</span></h2><div id="lagTable" class="empty">Aucun pic enregistré.</div></section>
+  </div>
+</main>
+<footer>AethoriaStats · mise à jour automatique</footer>
+
+<script>
+(function () {
+  'use strict';
+  var q = new URLSearchParams(location.search);
+  var CFG = window.AETHORIA_CONFIG || {};
+  var apiParam = q.get('api');
+  /* API === null : pas d'API (site statique) ; '' : API sur la meme origine (page servie par le plugin) */
+  var API = apiParam !== null ? apiParam.replace(/\/+$/, '') : (CFG.api != null ? String(CFG.api).replace(/\/+$/, '') : (CFG.snapshot ? null : ''));
+  var SNAP = q.get('snapshot') || CFG.snapshot || null;
+  var TOKEN = q.get('token') || '';
+  var REFRESH = Math.max(15, +CFG.refreshSec || 60);
+  var mode = API !== null ? 'api' : 'snapshot';
+  var css = getComputedStyle(document.documentElement);
+  function col(n) { return css.getPropertyValue(n).trim() || '#ccc'; }
+  var C = { gold: col('--gold'), green: col('--green'), red: col('--red'), blue: col('--blue'), purple: col('--purple'),
+            text: col('--text'), muted: col('--muted'), grid: col('--grid'), panel: col('--panel2'), line: col('--line') };
+
+  function $(id) { return document.getElementById(id); }
+  function url(p) { return API + p + (TOKEN ? (p.indexOf('?') < 0 ? '?' : '&') + 'token=' + encodeURIComponent(TOKEN) : ''); }
+  function get(p) {
+    return fetch(url(p), { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+  function setText(id, t) { var e = $(id); if (e) e.textContent = t; }
+  function setCls(id, c) { var e = $(id); if (e) e.className = 'v ' + (c || ''); }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function fmtTime(t) { var d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function fmtDayTime(t) { var d = new Date(t); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + fmtTime(t); }
+  function fmtDur(ms) {
+    var s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    return d > 0 ? d + 'j ' + h + 'h' : h > 0 ? h + 'h ' + m + 'min' : m + 'min';
+  }
+  function f1(v) { return v == null ? '–' : (Math.round(v * 10) / 10).toString(); }
+  function tpsCls(t) { return t >= 19 ? 'ok' : t >= 15 ? 'warn' : 'bad'; }
+  function pingCls(p) { return p < 80 ? 'ok' : p < 160 ? 'warn' : 'bad'; }
+
+  /* ------------------------------------------------------------ moteur de graphiques */
+  function fit(cv) {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 300, h = cv.clientHeight || 200;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    var c = cv.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { c: c, w: w, h: h };
+  }
+  function niceMax(v) {
+    if (!(v > 5)) return 5;
+    var p = Math.pow(10, Math.floor(Math.log(v) / Math.LN10)), f = v / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  }
+  function message(f, text) {
+    f.c.fillStyle = C.muted; f.c.font = '13px system-ui,sans-serif'; f.c.textAlign = 'center';
+    f.c.fillText(text, f.w / 2, f.h / 2);
+  }
+  function tooltip(c, W, x, y, title, rows) {
+    c.font = '12px system-ui,sans-serif';
+    var w = c.measureText(title).width, i;
+    for (i = 0; i < rows.length; i++) w = Math.max(w, c.measureText(rows[i].text).width + 14);
+    w += 16;
+    var h = 12 + 16 * (rows.length + 1), bx = x + 12;
+    if (bx + w > W - 4) bx = x - w - 12;
+    if (bx < 4) bx = 4;
+    c.fillStyle = 'rgba(20,17,13,.94)'; c.strokeStyle = C.line;
+    c.fillRect(bx, y, w, h); c.strokeRect(bx + .5, y + .5, w, h);
+    c.textAlign = 'left'; c.fillStyle = C.muted; c.fillText(title, bx + 8, y + 17);
+    for (i = 0; i < rows.length; i++) {
+      c.fillStyle = rows[i].color; c.fillRect(bx + 8, y + 26 + i * 16, 8, 8);
+      c.fillStyle = C.text; c.fillText(rows[i].text, bx + 22, y + 34 + i * 16);
+    }
+  }
+  function hookHover(cv, draw) {
+    if (cv._hooked) return; cv._hooked = true;
+    function pos(e) { var r = cv.getBoundingClientRect(), p = e.touches ? e.touches[0] : e; cv._hx = p.clientX - r.left; cv._hy = p.clientY - r.top; draw(cv); }
+    cv.addEventListener('mousemove', pos);
+    cv.addEventListener('touchmove', pos, { passive: true });
+    cv.addEventListener('mouseleave', function () { cv._hx = null; draw(cv); });
+    cv.addEventListener('touchend', function () { cv._hx = null; draw(cv); });
+  }
+
+  /* cfg: { series:[{label,color,data:[[x,y|null],...],fill}], yMin,yMax,yFmt,xFmt,tipFmt } */
+  function drawLine(cv) {
+    var cfg = cv._cfg; if (!cfg) return;
+    var f = fit(cv), c = f.c, W = f.w, H = f.h;
+    c.clearRect(0, 0, W, H);
+    var padL = 44, padR = 10, padT = 8, padB = 22, pw = W - padL - padR, ph = H - padT - padB;
+    var x0 = Infinity, x1 = -Infinity, ym = 0, s, i, p;
+    for (s = 0; s < cfg.series.length; s++) {
+      var d = cfg.series[s].data;
+      for (i = 0; i < d.length; i++) {
+        x0 = Math.min(x0, d[i][0]); x1 = Math.max(x1, d[i][0]);
+        if (d[i][1] != null) ym = Math.max(ym, d[i][1]);
+      }
+    }
+    if (!isFinite(x0)) { message(f, 'Pas encore de données'); return; }
+    if (x1 === x0) x1 = x0 + 1;
+    var yMin = cfg.yMin != null ? cfg.yMin : 0;
+    var yMax = cfg.yMax != null ? cfg.yMax : niceMax(ym * 1.1);
+    function X(x) { return padL + (x - x0) / (x1 - x0) * pw; }
+    function Y(y) { return padT + ph - (y - yMin) / (yMax - yMin) * ph; }
+    c.font = '11px system-ui,sans-serif'; c.lineWidth = 1;
+    for (i = 0; i <= 4; i++) {
+      var yv = yMin + (yMax - yMin) * i / 4, yy = Math.round(Y(yv)) + .5;
+      c.strokeStyle = C.grid; c.beginPath(); c.moveTo(padL, yy); c.lineTo(W - padR, yy); c.stroke();
+      c.fillStyle = C.muted; c.textAlign = 'right'; c.fillText((cfg.yFmt || function (v) { return Math.round(v * 10) / 10; })(yv), padL - 6, yy + 4);
+    }
+    c.textAlign = 'center'; c.fillStyle = C.muted;
+    for (i = 0; i <= 4; i++) { c.fillText((cfg.xFmt || fmtTime)(x0 + (x1 - x0) * i / 4), padL + pw * i / 4, H - 6); }
+    for (s = 0; s < cfg.series.length; s++) {
+      var se = cfg.series[s], dd = se.data, started = false, lastX = 0, firstX = 0;
+      c.strokeStyle = se.color; c.lineWidth = 2; c.beginPath();
+      for (i = 0; i < dd.length; i++) {
+        if (dd[i][1] == null) { started = false; continue; }
+        var px = X(dd[i][0]), py = Y(dd[i][1]);
+        if (!started) { c.moveTo(px, py); started = true; } else c.lineTo(px, py);
+      }
+      c.stroke();
+      if (se.fill && dd.length > 1) {
+        var g = c.createLinearGradient(0, padT, 0, padT + ph);
+        g.addColorStop(0, se.color + '55'); g.addColorStop(1, se.color + '05');
+        c.fillStyle = g; c.beginPath(); var open = false;
+        for (i = 0; i < dd.length; i++) {
+          if (dd[i][1] == null) { if (open) { c.lineTo(lastX, padT + ph); c.lineTo(firstX, padT + ph); c.closePath(); c.fill(); c.beginPath(); open = false; } continue; }
+          var qx = X(dd[i][0]), qy = Y(dd[i][1]);
+          if (!open) { c.moveTo(qx, padT + ph); c.lineTo(qx, qy); firstX = qx; open = true; } else c.lineTo(qx, qy);
+          lastX = qx;
+        }
+        if (open) { c.lineTo(lastX, padT + ph); c.lineTo(firstX, padT + ph); c.closePath(); c.fill(); }
+      }
+    }
+    if (cv._hx != null && cv._hx >= padL && cv._hx <= W - padR) {
+      var tx = x0 + (cv._hx - padL) / pw * (x1 - x0), rows = [], best = null;
+      c.strokeStyle = C.muted; c.lineWidth = 1; c.beginPath(); c.moveTo(cv._hx, padT); c.lineTo(cv._hx, padT + ph); c.stroke();
+      for (s = 0; s < cfg.series.length; s++) {
+        var dn = cfg.series[s].data, bi = -1, bd = Infinity;
+        for (i = 0; i < dn.length; i++) { var dist = Math.abs(dn[i][0] - tx); if (dn[i][1] != null && dist < bd) { bd = dist; bi = i; } }
+        if (bi < 0) continue;
+        p = dn[bi]; if (best === null) best = p[0];
+        c.fillStyle = cfg.series[s].color; c.beginPath(); c.arc(X(p[0]), Y(p[1]), 4, 0, 6.2832); c.fill();
+        rows.push({ color: cfg.series[s].color, text: cfg.series[s].label + ' : ' + (cfg.tipFmt || function (v) { return f1(v); })(p[1]) });
+      }
+      if (rows.length) tooltip(c, W, cv._hx, padT + 4, (cfg.xTip || fmtDayTime)(best), rows);
+    }
+  }
+  function line(id, cfg) { var cv = $(id); cv._cfg = cfg; hookHover(cv, drawLine); drawLine(cv); }
+
+  /* cfg: { labels:[], series:[{label,color,data:[]}], yFmt, tipFmt } */
+  function drawBars(cv) {
+    var cfg = cv._cfg; if (!cfg) return;
+    var f = fit(cv), c = f.c, W = f.w, H = f.h;
+    c.clearRect(0, 0, W, H);
+    var padL = 36, padR = 8, padT = 8, padB = 22, pw = W - padL - padR, ph = H - padT - padB, i, s, n = cfg.labels.length, ym = 0;
+    for (s = 0; s < cfg.series.length; s++) for (i = 0; i < n; i++) ym = Math.max(ym, cfg.series[s].data[i] || 0);
+    if (!n || ym <= 0) { message(f, 'Pas encore de données'); return; }
+    var yMax = niceMax(ym * 1.1);
+    function Y(v) { return padT + ph - v / yMax * ph; }
+    c.font = '11px system-ui,sans-serif';
+    for (i = 0; i <= 4; i++) {
+      var yy = Math.round(Y(yMax * i / 4)) + .5;
+      c.strokeStyle = C.grid; c.beginPath(); c.moveTo(padL, yy); c.lineTo(W - padR, yy); c.stroke();
+      c.fillStyle = C.muted; c.textAlign = 'right'; c.fillText((cfg.yFmt || function (v) { return Math.round(v * 10) / 10; })(yMax * i / 4), padL - 5, yy + 4);
+    }
+    var slot = pw / n, gw = slot * 0.78, bw = gw / cfg.series.length, step = Math.max(1, Math.ceil(n / Math.max(4, Math.floor(pw / 46))));
+    var hi = cv._hx != null ? Math.floor((cv._hx - padL) / slot) : -1;
+    for (i = 0; i < n; i++) {
+      var gx = padL + i * slot + (slot - gw) / 2;
+      if (i === hi) { c.fillStyle = 'rgba(232,220,196,.07)'; c.fillRect(padL + i * slot, padT, slot, ph); }
+      for (s = 0; s < cfg.series.length; s++) {
+        var v = cfg.series[s].data[i] || 0, y = Y(v);
+        c.fillStyle = cfg.series[s].color; c.fillRect(gx + s * bw, y, Math.max(1, bw - 1), padT + ph - y);
+      }
+      if (i % step === 0) { c.fillStyle = C.muted; c.textAlign = 'center'; c.fillText(cfg.labels[i], padL + i * slot + slot / 2, H - 6); }
+    }
+    if (hi >= 0 && hi < n) {
+      var rows = [];
+      for (s = 0; s < cfg.series.length; s++) rows.push({ color: cfg.series[s].color, text: cfg.series[s].label + ' : ' + (cfg.tipFmt || function (v) { return f1(v); })(cfg.series[s].data[i = hi] || 0) });
+      tooltip(c, W, cv._hx, padT + 4, cfg.labels[hi], rows);
+    }
+  }
+  function bars(id, cfg) { var cv = $(id); cv._cfg = cfg; hookHover(cv, drawBars); drawBars(cv); }
+
+  /* ------------------------------------------------------------ temps reel */
+  var rt = [], lastOk = 0, hist = null, stats = null, rangeH = 24;
+  var snap = null, snapAt = 0, snapBusy = null, apiDown = 0;
+
+  /* ---- source de donnees : API en direct, sinon fichier snapshot.json publie par le plugin ---- */
+  function loadSnap() {
+    if (!SNAP) return Promise.reject(new Error('pas de snapshot'));
+    if (snap && Date.now() - snapAt < 15000) return Promise.resolve(snap);
+    if (snapBusy) return snapBusy;
+    var u = SNAP + (SNAP.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();
+    snapBusy = fetch(u, { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (d) { snap = d; snapAt = Date.now(); snapBusy = null; return d; }, function (e) { snapBusy = null; throw e; });
+    return snapBusy;
+  }
+  function fromSnap(key) { return loadSnap().then(function (s) { mode = 'snapshot'; return s[key]; }); }
+  function source(path, key) {
+    if (API !== null && Date.now() > apiDown) {
+      return get(path).then(function (d) { mode = 'api'; return d; }, function (e) {
+        if (!SNAP) throw e;
+        apiDown = Date.now() + 30000; /* l'API est injoignable : on utilise le snapshot, nouvel essai dans 30 s */
+        return fromSnap(key);
+      });
+    }
+    return fromSnap(key);
+  }
+  function fmtAge(min) { return min < 1 ? "moins d'1 min" : min < 90 ? Math.round(min) + ' min' : Math.round(min / 60) + ' h'; }
+  function updateMode() {
+    var rs = $('rtSection'); if (rs) rs.hidden = mode !== 'api';
+    var note = $('note');
+    if (mode === 'snapshot' && snap) {
+      note.hidden = false;
+      note.textContent = snap.demo ? 'Données de démonstration — en attente de la première publication du serveur.'
+        : 'Données publiées par le serveur toutes les ' + (snap.intervalMin || 10) + ' min · dernière mise à jour : ' + fmtDayTime(snap.generatedAt) + '.';
+    } else { note.hidden = true; }
+  }
+
+  function updateLive(d) {
+    lastOk = Date.now();
+    document.title = (d.server || 'Serveur') + ' · ' + d.online + '/' + d.max + ' joueurs';
+    setText('title', ''); var h1 = $('title'); h1.textContent = d.server || 'Statistiques';
+    var sm = document.createElement('small'); sm.textContent = 'statistiques en direct'; h1.appendChild(sm);
+    setText('vOnline', d.online); setText('sOnline', 'sur ' + d.max + ' places');
+    setText('vRecord', d.record); setText('sRecord', d.recordTime ? fmtDayTime(d.recordTime) : '');
+    setText('vTps', f1(d.tps1)); setCls('vTps', tpsCls(d.tps1));
+    setText('sTps', '5 min ' + f1(d.tps5) + ' · 15 min ' + f1(d.tps15));
+    if (d.pingAvg == null) { setText('vPing', '–'); setCls('vPing', ''); setText('sPing', 'aucun joueur'); }
+    else { setText('vPing', d.pingAvg + ' ms'); setCls('vPing', pingCls(d.pingAvg)); setText('sPing', 'max ' + d.pingMax + ' ms'); }
+    setText('vRam', d.ramPct + '%'); setCls('vRam', d.ramPct >= 90 ? 'bad' : d.ramPct >= 75 ? 'warn' : '');
+    setText('sRam', Math.round(d.ramUsedMb) + ' / ' + Math.round(d.ramMaxMb) + ' Mo');
+    setText('vEnt', d.entities); setText('sEnt', d.chunks + ' chunks chargés');
+    setText('vActive', d.today.active); setText('sActive', d.today.new + ' nouveaux · pic ' + d.today.peak);
+    setText('vUp', fmtDur(d.uptimeMs)); setText('sUp', '');
+    updateMode();
+    if (mode !== 'api') return;
+    rt.push([d.t, d.online, d.tpsNow]);
+    var cut = d.t - 300000; while (rt.length && rt[0][0] < cut) rt.shift();
+    line('cRtPlayers', { series: [{ label: 'Joueurs', color: C.gold, fill: true, data: rt.map(function (p) { return [p[0], p[1]]; }) }],
+      xFmt: function (t) { var d2 = new Date(t); return pad(d2.getMinutes()) + ':' + pad(d2.getSeconds()); },
+      xTip: function (t) { var d2 = new Date(t); return pad(d2.getHours()) + ':' + pad(d2.getMinutes()) + ':' + pad(d2.getSeconds()); },
+      yFmt: function (v) { return Math.round(v); }, tipFmt: function (v) { return Math.round(v); } });
+    line('cRtTps', { series: [{ label: 'TPS', color: C.green, fill: true, data: rt.map(function (p) { return [p[0], p[2]]; }) }],
+      yMin: 0, yMax: 20,
+      xFmt: function (t) { var d2 = new Date(t); return pad(d2.getMinutes()) + ':' + pad(d2.getSeconds()); },
+      xTip: function (t) { var d2 = new Date(t); return pad(d2.getHours()) + ':' + pad(d2.getMinutes()) + ':' + pad(d2.getSeconds()); } });
+  }
+
+  function drawHistory() {
+    if (!hist) return;
+    var pts = hist.points, now = pts.length ? pts[pts.length - 1][0] : Date.now();
+    if (rangeH > 0) { var cut = now - rangeH * 3600000; pts = pts.filter(function (p) { return p[0] >= cut; }); }
+    var xf = rangeH === 0 || rangeH > 24 ? fmtDayTime : fmtTime;
+    function ser(i) { return pts.map(function (p) { return [p[0], p[i]]; }); }
+    setText('hint1', pts.length + ' relevés');
+    line('cPlayers', { series: [{ label: 'Joueurs', color: C.gold, fill: true, data: ser(1) }], xFmt: xf,
+      yFmt: function (v) { return Math.round(v); }, tipFmt: function (v) { return Math.round(v); } });
+    line('cTps', { series: [{ label: 'TPS', color: C.green, fill: true, data: ser(2) }], yMin: 0, yMax: 20, xFmt: xf });
+    line('cPing', { series: [{ label: 'Ping', color: C.blue, fill: true, data: ser(3) }], xFmt: xf,
+      yFmt: function (v) { return Math.round(v); }, tipFmt: function (v) { return Math.round(v) + ' ms'; } });
+    line('cRam', { series: [{ label: 'Mémoire', color: C.purple, fill: true, data: ser(4) }], yMin: 0, yMax: 100, xFmt: xf,
+      yFmt: function (v) { return Math.round(v) + '%'; }, tipFmt: function (v) { return Math.round(v) + '%'; } });
+    line('cEnt', { series: [{ label: 'Entités', color: C.red, fill: true, data: ser(5) }], xFmt: xf,
+      yFmt: function (v) { return Math.round(v); }, tipFmt: function (v) { return Math.round(v); } });
+  }
+
+  function td(tr, text, cls) { var e = document.createElement('td'); e.textContent = text; if (cls) e.className = cls; tr.appendChild(e); return e; }
+  function th(tr, text) { var e = document.createElement('th'); e.textContent = text; tr.appendChild(e); }
+  function pct(v) { return v == null ? '–' : Math.round(v) + '%'; }
+  function dm(iso) { return iso.slice(8, 10) + '/' + iso.slice(5, 7); }
+
+  function drawStats() {
+    if (!stats) return;
+    setText('hZone', stats.zone);
+    var days = stats.daily.slice(-30);
+    bars('cDaily', { labels: days.map(function (d) { return dm(d.day); }),
+      series: [{ label: 'Actifs', color: C.gold, data: days.map(function (d) { return d.active; }) },
+               { label: 'Nouveaux', color: C.green, data: days.map(function (d) { return d.new; }) }],
+      yFmt: function (v) { return Math.round(v); }, tipFmt: function (v) { return Math.round(v); } });
+    var hl = []; for (var h = 0; h < 24; h++) hl.push(pad(h) + 'h');
+    bars('cHours', { labels: hl, series: [{ label: 'Moyenne', color: C.gold, data: stats.hours.avg },
+                                          { label: 'Max', color: 'rgba(212,166,58,.35)', data: stats.hours.max }],
+      tipFmt: function (v) { return f1(v); } });
+    bars('cWeek', { labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+      series: [{ label: 'Joueurs moyens', color: C.blue, data: stats.weekdays }], tipFmt: function (v) { return f1(v); } });
+
+    var r = stats.retention;
+    setText('rD1', pct(r.d1.pct)); setText('rD7', pct(r.d7.pct)); setText('rD30', pct(r.d30.pct)); setText('rR7', pct(r.return7.pct));
+    setText('retHint', 'n=' + r.d1.eligible + ' joueurs');
+    var box = $('cohorts'); while (box.firstChild) box.removeChild(box.firstChild);
+    if (!r.cohorts.length) { var em = document.createElement('div'); em.className = 'empty'; em.textContent = 'Pas encore de cohorte.'; box.appendChild(em); }
+    else {
+      var t = document.createElement('table'), hr = document.createElement('tr');
+      ['Arrivée', 'Nouveaux', 'D1', 'D7', 'D30'].forEach(function (x) { th(hr, x); }); t.appendChild(hr);
+      r.cohorts.forEach(function (c) {
+        var tr = document.createElement('tr'); td(tr, dm(c.day)); td(tr, c.size); td(tr, pct(c.d1)); td(tr, pct(c.d7)); td(tr, pct(c.d30)); t.appendChild(tr);
+      });
+      box.appendChild(t);
+    }
+    var s = stats.summary, sb = $('summary'); sb.className = ''; while (sb.firstChild) sb.removeChild(sb.firstChild);
+    var tb = document.createElement('table'), rows = [
+      ['Joueurs uniques (total)', s.totalPlayers], ['Actifs sur 7 jours', s.active7], ['Actifs sur 30 jours', s.active30],
+      ['Nouveaux sur 7 jours', s.new7], ['Nouveaux sur 30 jours', s.new30], ['Session moyenne', fmtDur(s.avgSessionMs)]];
+    rows.forEach(function (x) { var tr = document.createElement('tr'); td(tr, x[0]); td(tr, x[1]); tb.appendChild(tr); });
+    sb.appendChild(tb);
+
+    var lb = $('lagTable'); while (lb.firstChild) lb.removeChild(lb.firstChild);
+    if (!stats.lag.length) { lb.className = 'empty'; lb.textContent = 'Aucun pic enregistré.'; return; }
+    lb.className = '';
+    var lt = document.createElement('table'), lh = document.createElement('tr'), withCause = stats.lag.some(function (e) { return e.cause != null; });
+    ['Date', 'TPS', 'Blocage', 'Joueurs', 'Entités', 'Chunks', 'RAM', 'GC'].forEach(function (x) { th(lh, x); });
+    if (withCause) th(lh, 'Cause'); lt.appendChild(lh);
+    stats.lag.forEach(function (e) {
+      var tr = document.createElement('tr');
+      td(tr, fmtDayTime(e.t)); td(tr, f1(e.tps), tpsCls(e.tps)); td(tr, '+' + e.stallMs + ' ms'); td(tr, e.players);
+      td(tr, e.entities); td(tr, e.chunks); td(tr, e.ramPct + '%'); td(tr, e.gcMs + ' ms');
+      if (withCause) td(tr, e.cause || '');
+      lt.appendChild(tr);
+    });
+    lb.appendChild(lt);
+  }
+
+  function tickStatus() {
+    if (mode === 'snapshot' && snap && snap.demo) {
+      $('dot').className = 'dot';
+      setText('statusText', 'Démonstration');
+      return;
+    }
+    if (mode === 'snapshot' && snap) {
+      var ageMin = (Date.now() - snap.generatedAt) / 60000, lim = (snap.intervalMin || 10) * 2.5 + 2;
+      $('dot').className = 'dot' + (ageMin < lim ? ' on' : '');
+      setText('statusText', (ageMin < lim ? 'Données à jour' : 'Données anciennes') + ' (il y a ' + fmtAge(ageMin) + ')');
+      return;
+    }
+    var age = lastOk ? (Date.now() - lastOk) / 1000 : Infinity;
+    $('dot').className = 'dot' + (age < 8 ? ' on' : '');
+    setText('statusText', age < 8 ? 'En direct' : lastOk ? 'Connexion perdue (' + Math.round(age) + ' s)' : 'Connexion…');
+  }
+
+  function loopLive() {
+    source('/api/live', 'live').then(updateLive).catch(function () { }).then(function () {
+      tickStatus(); setTimeout(loopLive, mode === 'snapshot' ? REFRESH * 1000 : 2000);
+    });
+  }
+  function loopSlow() {
+    Promise.all([
+      source('/api/history', 'history').then(function (d) { hist = d; drawHistory(); }).catch(function () { }),
+      source('/api/stats', 'stats').then(function (d) { stats = d; drawStats(); }).catch(function () { })
+    ]).then(function () { setTimeout(loopSlow, mode === 'snapshot' ? REFRESH * 1000 : 30000); });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('#ranges button'), function (b) {
+    b.addEventListener('click', function () {
+      rangeH = parseInt(b.getAttribute('data-h'), 10);
+      Array.prototype.forEach.call(document.querySelectorAll('#ranges button'), function (x) { x.classList.toggle('active', x === b); });
+      drawHistory();
+    });
+  });
+  var rz = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(rz);
+    rz = setTimeout(function () {
+      ['cRtPlayers', 'cRtTps', 'cPlayers', 'cTps', 'cPing', 'cRam', 'cEnt'].forEach(function (id) { drawLine($(id)); });
+      ['cDaily', 'cHours', 'cWeek'].forEach(function (id) { drawBars($(id)); });
+    }, 120);
+  });
+
+  loopLive(); loopSlow();
+  setInterval(tickStatus, 1000);
+})();
+</script>
+</body>
+</html>
